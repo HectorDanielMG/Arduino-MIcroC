@@ -1,6 +1,6 @@
 ORG 0x00        ; Comienza el programa en la dirección 0
     BSF STATUS, RP0     ; Cambia a banco 1
-    MOVLW B'00000001'   ; Configura el pin RB0 como salida para el motor
+    MOVLW B'00000111'   ; Configura RB0 (motor), RB1 (LED verde), RB2 (LED rojo) como salida
     TRISB
     BCF STATUS, RP0     ; Cambia a banco 0
 
@@ -16,21 +16,23 @@ Iniciar:
 
 EncenderMotor:
     BSF PORTB, 0        ; Enciende el motor
+    BSF PORTB, 1        ; Enciende el LED verde (motor encendido)
+    BCF PORTB, 2        ; Apaga el LED rojo
+    CALL Temporizador    ; Inicia temporizador de autoapagado
     RETURN
 
 ApagarMotor:
     BCF PORTB, 0        ; Apaga el motor
+    BCF PORTB, 1        ; Apaga el LED verde
+    BSF PORTB, 2        ; Enciende el LED rojo (motor apagado)
     RETURN
 
-BluetoothCheck:
-    ; Aquí iría el código para leer el módulo Bluetooth con validación
-    MOVF RCREG, W       ; Recibe el dato de Bluetooth
-    XORLW 'E'           ; Compara si el dato es 'E' (Encender)
-    BTFSC STATUS, Z
-    BSF PORTB, 0        ; Si es 'E', enciende el motor
-    XORLW 'A'           ; Compara si el dato es 'A' (Apagar)
-    BTFSC STATUS, Z
-    BCF PORTB, 0        ; Si es 'A', apaga el motor
+Temporizador:
+    MOVLW D'200'        ; Ajusta un temporizador para autoapagado
+TemporizadorLoop:
+    DECFSZ WREG, F
+    GOTO TemporizadorLoop
+    CALL ApagarMotor     ; Apaga el motor después del tiempo
     RETURN
 
 EsperaComando:
