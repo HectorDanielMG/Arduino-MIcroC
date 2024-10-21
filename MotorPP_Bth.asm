@@ -11,33 +11,30 @@ Inicio:
     CALL RetrocederMotor
     BTFSC PORTB, 2      ; Si se recibe comando Bluetooth
     CALL CambiarSentido
-    CALL VerificarPasos  ; Verifica la precisión en los pasos dados
+    CALL VerificarPosicion ; Actualiza el registro de posición
     GOTO Inicio
 
 AvanzarMotor:
-    ; Código para avanzar el motor paso a paso
     MOVLW D'10'         ; Define cuántos pasos dar
     CALL MoverMotor
+    INCF POSICION, F    ; Incrementa la posición del motor
     RETURN
 
 RetrocederMotor:
-    ; Código para retroceder el motor paso a paso
     MOVLW D'10'
     CALL MoverMotorInverso
+    DECF POSICION, F    ; Decrementa la posición del motor
     RETURN
 
 CambiarSentido:
-    ; Código para cambiar el sentido del motor desde Bluetooth
     RETURN
 
 MoverMotor:
-    ; Implementación para mover el motor hacia adelante
     RETURN
 
 MoverMotorInverso:
-    ; Implementación para mover el motor hacia atrás
     RETURN
 
-VerificarPasos:
-    ; Código para verificar si se han dado el número correcto de pasos
+VerificarPosicion:
+    ; Código para actualizar la posición del motor en un registro
     RETURN
