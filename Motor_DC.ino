@@ -1,43 +1,72 @@
-// Definición de pines para los botones
-const int botonHorario = 10;     // Botón P1 conectado al pin D10
-const int botonAntihorario = 9;  // Botón P2 conectado al pin D9
+// Pines de conexión
+const int pinMotorForward = 9;   // Pin para dirección horaria
+const int pinMotorBackward = 10; // Pin para dirección antihoraria
+const int pinPotenciometro = A0; // Pin del potenciómetro para velocidad
+const int pinLedForward = 6;     // LED para sentido horario
+const int pinLedBackward = 7;    // LED para sentido antihorario
+const int pinStopButton = 8;     // Botón para parada de emergencia
 
-// Definición de pines para los relés
-const int releHorario = 5;       // Relé RL1 conectado al pin D5
-const int releAntihorario = 4;   // Relé RL2 conectado al pin D4
+// Variables
+int velocidadMotor = 0;   // Variable para almacenar la velocidad del motor
+bool motorDetenido = false; // Estado de parada de emergencia
 
 void setup() {
-  // Configurar los pines de los botones como entradas con pull-up interno
-  pinMode(botonHorario, INPUT_PULLUP);
-  pinMode(botonAntihorario, INPUT_PULLUP);
-
-  // Configurar los pines de los relés como salidas
-  pinMode(releHorario, OUTPUT);
-  pinMode(releAntihorario, OUTPUT);
-
-  // Asegurar que los relés estén apagados al iniciar
-  digitalWrite(releHorario, LOW);
-  digitalWrite(releAntihorario, LOW);
+    // Configuración de pines
+    pinMode(pinMotorForward, OUTPUT);
+    pinMode(pinMotorBackward, OUTPUT);
+    pinMode(pinLedForward, OUTPUT);
+    pinMode(pinLedBackward, OUTPUT);
+    pinMode(pinStopButton, INPUT_PULLUP);
+    
+    Serial.begin(9600); // Comunicación serial para depuración
 }
 
 void loop() {
-  // Leer el estado de los botones
-  int estadoBotonHorario = digitalRead(botonHorario);
-  int estadoBotonAntihorario = digitalRead(botonAntihorario);
+    // Leer el estado del botón de parada de emergencia
+    motorDetenido = !digitalRead(pinStopButton);
 
-  // Invertir lógica: Si se presiona el botón P1, ahora el motor gira en sentido antihorario
-  if (estadoBotonHorario == LOW && estadoBotonAntihorario == HIGH) {
-    digitalWrite(releAntihorario, HIGH);   // Activar relé de giro antihorario
-    digitalWrite(releHorario, LOW);        // Asegurar que el relé horario esté apagado
-  } 
-  // Invertir lógica: Si se presiona el botón P2, ahora el motor gira en sentido horario
-  else if (estadoBotonAntihorario == LOW && estadoBotonHorario == HIGH) {
-    digitalWrite(releHorario, HIGH);       // Activar relé de giro horario
-    digitalWrite(releAntihorario, LOW);    // Asegurar que el relé antihorario esté apagado
-  } 
-  // Si no se presiona ningún botón, ambos relés deben estar apagados (motor sin girar)
-  else {
-    digitalWrite(releHorario, LOW);
-    digitalWrite(releAntihorario, LOW);
-  }
+    // Si el botón de parada no está presionado
+    if (!motorDetenido) {
+        // Leer el valor del potenciómetro para ajustar la velocidad
+        int valorPot = analogRead(pinPotenciometro);
+        velocidadMotor = map(valorPot, 0, 1023, 0, 255);
+
+        // Leer comandos para el sentido del motor desde el serial
+        if (Serial.available() > 0) {
+            char comando = Serial.read();
+            
+            // Ajustar la dirección y activar LEDs según el comando
+            if (comando == 'F') {
+                moverMotor(true);
+            } else if (comando == 'B') {
+                moverMotor(false);
+            }
+        }
+    } else {
+        // Parar el motor y apagar LEDs en caso de parada de emergencia
+        detenerMotor();
+    }
+}
+
+// Función para mover el motor en la dirección indicada
+void moverMotor(bool sentidoHorario) {
+    if (sentidoHorario) {
+        analogWrite(pinMotorForward, velocidadMotor);
+        analogWrite(pinMotorBackward, 0);
+        digitalWrite(pinLedForward, HIGH);
+        digitalWrite(pinLedBackward, LOW);
+    } else {
+        analogWrite(pinMotorForward, 0);
+        analogWrite(pinMotorBackward, velocidadMotor);
+        digitalWrite(pinLedForward, LOW);
+        digitalWrite(pinLedBackward, HIGH);
+    }
+}
+
+// Función para detener el motor
+void detenerMotor() {
+    analogWrite(pinMotorForward, 0);
+    analogWrite(pinMotorBackward, 0);
+    digitalWrite(pinLedForward, LOW);
+    digitalWrite(pinLedBackward, LOW);
 }
