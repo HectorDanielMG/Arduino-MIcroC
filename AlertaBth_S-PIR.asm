@@ -1,36 +1,55 @@
-; Sistema de seguridad con detección de movimiento y alerta Bluetooth
+; AlertaBth_S-PIR.asm - Detección de movimiento mediante sensor PIR y envío de alerta vía Bluetooth
+; Este código activa una alerta Bluetooth cuando se detecta movimiento prolongado
 
-.org 0x0000
-    rjmp inicio
+.INCLUDE "m328pdef.inc"      ; Archivo de configuración del ATmega328P
 
-inicio:
-    ldi r16, (1<<DDB0)              ; Configurar PB0 como salida (sirena o LED de alerta)
-    out DDRB, r16
-    ldi r16, (1<<DDA1)              ; Configurar PA1 como entrada (sensor PIR)
-    out DDRA, r16
-    ldi r16, (1<<RXEN) | (1<<TXEN)  ; Habilitar UART RX y TX
-    out UCR, r16
+; Definición de registros
+.DEF temp = r16              ; Registro temporal
+.DEF pir_status = r17        ; Estado del PIR (movimiento detectado)
+.DEF alert_flag = r18        ; Bandera de alerta
 
-configurarUART:
-    ldi r16, 103                    ; Configurar baud rate para 9600 bps (para 16 MHz)
-    out UBRRL, r16
-    ldi r16, (1<<UCSZ1) | (1<<UCSZ0) ; 8 bits de datos, sin paridad, 1 bit de parada
-    out UCSRC, r16
+; Configuración de pines y constantes
+.EQU PIR_PIN = 0             ; PIN del sensor PIR (PD0)
+.EQU BT_TX = 1               ; PIN de transmisión de Bluetooth (PD1)
+.EQU MOVEMENT_THRESHOLD = 50 ; Umbral de detección continua (50 ciclos)
 
-bucle:
-    call detectarMovimiento
-    brne enviarAlerta               ; Si detecta movimiento, enviar alerta
-    rjmp bucle
+Inicio:
+    ; Configuración de I/O
+    ldi temp, (1 << PIR_PIN)    ; Configura PD0 como entrada para el sensor PIR
+    out DDRD, temp
+    ldi temp, (1 << BT_TX)      ; Configura PD1 como salida para el módulo Bluetooth
+    out DDRD, temp
 
-detectarMovimiento:
-    sbis PINA, PA1                  ; Leer estado del sensor PIR
-    ldi r16, 0
-    ret
-    ldi r16, 1                      ; Movimiento detectado
-    ret
+    ; Inicialización de variables
+    clr pir_status             ; Estado inicial del PIR sin movimiento
+    clr alert_flag             ; Estado inicial de la alerta en cero
 
-enviarAlerta:
-    ldi r16, 'A'                    ; Enviar 'A' como mensaje de alerta
-    out UDR, r16
-    ret
- 
+LoopPrincipal:
+    ; Leer el estado del sensor PIR
+    sbis PIND, PIR_PIN         ; Si el sensor detecta movimiento...
+    rjmp MovimientoDetectado   ; Saltar a la rutina de detección de movimiento
+
+    ; Si no hay movimiento, resetear las variables y continuar
+    clr pir_status             ; Estado sin movimiento
+    clr alert_flag             ; Desactivar la bandera de alerta
+    rjmp LoopPrincipal         ; Regresar al inicio del loop
+
+MovimientoDetectado:
+    inc pir_status             ; Incrementa el contador de detección de movimiento
+    cpi pir_status, MOVEMENT_THRESHOLD ; Compara con el umbral
+    brlo LoopPrincipal         ; Si no alcanza el umbral, regresa a seguir monitoreando
+
+EnviarAlerta:
+    sbi PORTD, BT_TX           ; Activa el pin de transmisión Bluetooth para enviar alerta
+    ldi alert_flag, 1          ; Activa la bandera de alerta para indicar que la señal fue enviada
+
+    ; Pausa breve para transmisión
+    ldi temp, 0xFF             ; Pausa en ciclos para asegurar la transmisión
+Delay:
+    dec temp
+    brne Delay
+
+    ; Resetear variables y volver a la espera de movimiento
+    clr pir_status             ; Reinicia el contador de movimiento
+    cbi PORTD, BT_TX           ; Desactiva el pin de transmisión
+    rjmp LoopPrincipal         ; Regresa al inicio del loop
