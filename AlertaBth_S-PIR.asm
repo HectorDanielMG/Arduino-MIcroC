@@ -1,55 +1,73 @@
-; AlertaBth_S-PIR.asm - Detección de movimiento mediante sensor PIR y envío de alerta vía Bluetooth
-; Este código activa una alerta Bluetooth cuando se detecta movimiento prolongado
+; Programa en ensamblador para un sistema de alerta con sensor PIR y comunicación Bluetooth
+; Este ejemplo está pensado para un microcontrolador que tenga un puerto para Bluetooth y un puerto de entrada para el sensor PIR.
+; Supongamos que el LED de alerta está conectado a PORTB, bit 0, y el sensor PIR a PORTA, bit 0.
+; La comunicación Bluetooth se realiza a través de USART.
 
-.INCLUDE "m328pdef.inc"      ; Archivo de configuración del ATmega328P
+    LIST P=16F877A            ; Modelo del microcontrolador
+    INCLUDE <P16F877A.INC>
 
-; Definición de registros
-.DEF temp = r16              ; Registro temporal
-.DEF pir_status = r17        ; Estado del PIR (movimiento detectado)
-.DEF alert_flag = r18        ; Bandera de alerta
+    ORG 0x00                  ; Dirección de inicio del programa
+    GOTO INICIO               ; Ir a la etiqueta INICIO al comienzo
 
-; Configuración de pines y constantes
-.EQU PIR_PIN = 0             ; PIN del sensor PIR (PD0)
-.EQU BT_TX = 1               ; PIN de transmisión de Bluetooth (PD1)
-.EQU MOVEMENT_THRESHOLD = 50 ; Umbral de detección continua (50 ciclos)
+; Configuración de constantes y pines
+PIR_SENSOR  EQU PORTA, 0      ; Pin donde se conecta el sensor PIR
+LED_ALERTA  EQU PORTB, 0      ; Pin donde se conecta el LED de alerta
+BT_TX       EQU TXREG         ; Registro de transmisión para Bluetooth
+BT_STATUS   EQU PIR_ACTIVO    ; Mensaje para enviar por Bluetooth
 
-Inicio:
-    ; Configuración de I/O
-    ldi temp, (1 << PIR_PIN)    ; Configura PD0 como entrada para el sensor PIR
-    out DDRD, temp
-    ldi temp, (1 << BT_TX)      ; Configura PD1 como salida para el módulo Bluetooth
-    out DDRD, temp
+; Constantes
+PIR_ACTIVO  EQU 0x01          ; Valor para indicar que el sensor PIR ha detectado movimiento
+PIR_INACTIVO EQU 0x00         ; Valor para indicar que no hay detección
 
-    ; Inicialización de variables
-    clr pir_status             ; Estado inicial del PIR sin movimiento
-    clr alert_flag             ; Estado inicial de la alerta en cero
+; Inicio del programa
+INICIO:
+    ; Configuración de puertos
+    BSF STATUS, RP0           ; Cambiar a banco 1
+    MOVLW 0x01
+    MOVWF TRISA               ; Configurar RA0 (PIR_SENSOR) como entrada
+    CLRF TRISB                ; Configurar PORTB como salida (LED_ALERTA)
+    BCF STATUS, RP0           ; Cambiar a banco 0
 
-LoopPrincipal:
-    ; Leer el estado del sensor PIR
-    sbis PIND, PIR_PIN         ; Si el sensor detecta movimiento...
-    rjmp MovimientoDetectado   ; Saltar a la rutina de detección de movimiento
+    ; Configuración de USART para comunicación Bluetooth
+    CALL CONFIG_USART         ; Configurar USART para Bluetooth
 
-    ; Si no hay movimiento, resetear las variables y continuar
-    clr pir_status             ; Estado sin movimiento
-    clr alert_flag             ; Desactivar la bandera de alerta
-    rjmp LoopPrincipal         ; Regresar al inicio del loop
+    ; Bucle principal
+BUCLE_PRINCIPAL:
+    ; Comprobar si el sensor PIR detecta movimiento
+    BTFSC PIR_SENSOR          ; Si el sensor PIR está activo
+    CALL ACTIVAR_ALERTA       ; Llamar a la rutina de alerta
+    BTFSS PIR_SENSOR          ; Si el sensor PIR está inactivo
+    CALL DESACTIVAR_ALERTA    ; Llamar a la rutina de desactivación de alerta
 
-MovimientoDetectado:
-    inc pir_status             ; Incrementa el contador de detección de movimiento
-    cpi pir_status, MOVEMENT_THRESHOLD ; Compara con el umbral
-    brlo LoopPrincipal         ; Si no alcanza el umbral, regresa a seguir monitoreando
+    GOTO BUCLE_PRINCIPAL      ; Repetir el bucle principal
 
-EnviarAlerta:
-    sbi PORTD, BT_TX           ; Activa el pin de transmisión Bluetooth para enviar alerta
-    ldi alert_flag, 1          ; Activa la bandera de alerta para indicar que la señal fue enviada
+; Rutina para configurar USART
+CONFIG_USART:
+    MOVLW 0x24                ; Configurar velocidad de transmisión (por ejemplo, 9600 baudios)
+    MOVWF SPBRG
+    BSF TXSTA, TXEN           ; Habilitar el transmisor
+    BSF RCSTA, SPEN           ; Habilitar el puerto serial
+    RETURN
 
-    ; Pausa breve para transmisión
-    ldi temp, 0xFF             ; Pausa en ciclos para asegurar la transmisión
-Delay:
-    dec temp
-    brne Delay
+; Rutina para activar alerta
+ACTIVAR_ALERTA:
+    BSF LED_ALERTA            ; Encender LED de alerta
+    MOVLW PIR_ACTIVO          ; Cargar el valor de PIR_ACTIVO
+    CALL ENVIAR_BT            ; Enviar señal de activación por Bluetooth
+    RETURN
 
-    ; Resetear variables y volver a la espera de movimiento
-    clr pir_status             ; Reinicia el contador de movimiento
-    cbi PORTD, BT_TX           ; Desactiva el pin de transmisión
-    rjmp LoopPrincipal         ; Regresa al inicio del loop
+; Rutina para desactivar alerta
+DESACTIVAR_ALERTA:
+    BCF LED_ALERTA            ; Apagar LED de alerta
+    MOVLW PIR_INACTIVO        ; Cargar el valor de PIR_INACTIVO
+    CALL ENVIAR_BT            ; Enviar señal de desactivación por Bluetooth
+    RETURN
+
+; Rutina para enviar datos por Bluetooth
+ENVIAR_BT:
+    MOVWF BT_TX               ; Cargar el valor en el registro de transmisión
+    BTFSS PIR_SENSOR          ; Verificar si se completó la transmisión
+    NOP                       ; Esperar a que el dato se envíe
+    RETURN
+
+    END
