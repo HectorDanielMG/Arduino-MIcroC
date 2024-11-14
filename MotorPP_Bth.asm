@@ -124,4 +124,4 @@ RETARDO_LOOP:
     GOTO RETARDO_LOOP
     RETURN
 
-    END
+    END  ; FIn del programa
